@@ -1,0 +1,12 @@
+{
+    "name": "grapheen",
+    "description": "graph visualizer",
+    "version": "0.0.1-dev",
+    "main": "main.js",
+    "dependencies": {
+      "gpgpu": "*",
+      "esprima": "1.2.x",
+      "browserify": "4.1.x",
+      "brfs": "1.1.x"
+    }
+}
