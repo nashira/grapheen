@@ -1,4 +1,4 @@
-var GraphView = require('./lib/graph_view.js');
+var GraphView = require('./src/graph_view.js');
 
 module.exports = {
   GraphView: GraphView

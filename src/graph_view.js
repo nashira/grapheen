@@ -2,9 +2,10 @@
 var Program = require('gpgpu').Program;
 var Matrix = require('gpgpu').Matrix;
 var Camera = require('gpgpu').Camera;
+var Grapheen = require('./grapheen');
 var Graph = require('./graph');
 var esprima = require('esprima');
-var dat = require('./dat.gui.min');
+var dat = require('../lib/dat.gui.min');
 // var $ = require('atom').$;
 
 var Colors = {
@@ -59,14 +60,21 @@ function buildTree(src) {
   var stack = [0];
   var edges = [];
   var colors = [];
+
+  var graph = window.graph = new Graph();
+
   traverse(tree, {
     enter: function (obj) {
       if (obj.type in Colors) {
         var id = vertexId++;
         colorStack.push(Colors[obj.type]);
         var clr = colorStack[colorStack.length - 1];
-        colors.push(clr[0]/100, clr[1]/100, clr[2]/100);
-        edges.push(stack[stack.length - 1], id);
+        // colors.push(clr[0]/100, clr[1]/100, clr[2]/100);
+        // edges.push(stack[stack.length - 1], id);
+
+        graph.addNode(id, obj).color = [clr[0]/100, clr[1]/100, clr[2]/100];
+        graph.addEdge(stack[stack.length - 1], id);
+
         stack.push(id);
       }
     },
@@ -77,7 +85,8 @@ function buildTree(src) {
       }
     }
   });
-  return [vertexId, edges, colors];
+  // return [vertexId, edges, colors];
+  return graph;
 }
 
 // Executes visitor on the object and its children (recursively).
@@ -113,15 +122,13 @@ GraphView.prototype.init = function (source, canvas, container) {
 
   var width = this.width = parseInt(canvas.offsetWidth);
   var height = this.height = parseInt(canvas.offsetHeight);
-  console.log(width, height)
-  console.log(canvas)
   var devicePixelRatio = window.devicePixelRatio || 1
   canvas.width = width * devicePixelRatio
   canvas.height = height * devicePixelRatio
   canvas.style.width = canvas.style.height = '100%'
 
   if (!this.graph) {
-    this.graph = new Graph();
+    this.graph = new Grapheen();
 
     var gui = new dat.GUI({autoPlace: false});
     gui.add(this.graph, 'vDt', 0, 1);
@@ -185,7 +192,7 @@ GraphView.prototype.init = function (source, canvas, container) {
 
   var gl = canvas.getContext('webgl');
   Program.init(gl);
-  Graph.init(gl);
+  Grapheen.init(gl);
 
 
   // var editor = atom.workspace.getActiveEditor();
@@ -194,19 +201,17 @@ GraphView.prototype.init = function (source, canvas, container) {
 
   console.log(data)
 
+  this.graph.graph = data;
+
   var ww = width * 2
   var wh = height * 2
-  this.graph.load({
-    numVertices: data[0],
-    numEdges: data[1].length / 2,
-    edges: data[1],
-    vertexColors: data[2]
-  }, 1.5, function () {
-    this.graph.drawVerticesProg.setViewport(0, 0, ww, wh);
-    this.graph.drawEdgesProg.setViewport(0, 0, ww, wh);
-    this.graph.runInitialPos(0.1);
-    this.animate();
-  }.bind(this));
+
+  this.graph.reload();
+
+  this.graph.drawVerticesProg.setViewport(0, 0, ww, wh);
+  this.graph.drawEdgesProg.setViewport(0, 0, ww, wh);
+  this.graph.runInitialPos(0.1);
+  this.animate();
 }
 
 GraphView.prototype.animate = function () {

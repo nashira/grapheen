@@ -4,117 +4,146 @@ var Program = require('gpgpu').Program;
 var RenderTarget = require('gpgpu').RenderTarget;
 var Texture = require('gpgpu').Texture;
 var Utils = require('gpgpu').Utils;
+var Graph = require('./graph');
 var fs = require('fs');
 var path = require('path');
 
-var gl;
+var gl, Shaders;
 
-var Graph = function () {
-
+var Grapheen = function (graph) {
+  this.downsampleK = 1.6;
+  this.graph = graph;
   this.vDt = 0.01;
   this.eDt = 0.01;
   this.pointSize = 6;
+  this.numVertices = 0;
+  this.numEdges = 0;
 }
 
-Graph.init = function (_gl) {
+Grapheen.init = function (_gl) {
   gl = _gl;
+  Shaders = [
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/initial_posv.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/initial_posf.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/nbodyv.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/nbodyf.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/edge_forcev.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/edge_forcef.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/draw_verticesv.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/draw_verticesf.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/draw_edgesv.glsl', 'utf8')),
+    Utils.processShader(fs.readFileSync(__dirname +'/Shaders/draw_edgesf.glsl', 'utf8'))
+  ];
 }
 
-Graph.prototype = {
-  load: function (data, downsample, onLoad) {
-    if (this.positionTarget) {
-      gl.deleteFramebuffer(this.positionTarget.framebuffer)
-      gl.deleteTexture(this.positionTarget.getGlTexture())
-      gl.deleteFramebuffer(this.forceTarget.framebuffer)
-      gl.deleteTexture(this.forceTarget.getGlTexture())
-      gl.deleteFramebuffer(this.tempTarget.framebuffer)
-      gl.deleteTexture(this.tempTarget.getGlTexture())
-      gl.deleteBuffer(this.edgeCoords.glBuffer);
+Grapheen.prototype = {
+  setNumVertices: function () {
+    // if (this.numVertices == this.graph.nodeCount) {
+    //   return;
+    // }
+
+    this.numVertices = this.graph.nodeCount;
+    this.itemTS = Utils.getPotSize(this.numVertices);
+    this.downsampleIdx = 0;
+    this.downsample = Math.floor(this.numVertices * this.downsampleK * 0.00015 + 1);
+  },
+
+  deleteVertexData: function () {
+    if (this.vertCoords) {
       gl.deleteBuffer(this.vertCoords.glBuffer);
+    }
+    if (this.vertColors) {
       gl.deleteBuffer(this.vertColors.glBuffer);
     }
-
-    this.numVertices = data.numVertices;
-    this.numEdges = data.numEdges;
-    this.downsample =
-        Math.floor(this.numVertices * ((downsample || 0) * 0.00015)) + 1;
-    this.downsampleIdx = 0;
-    this.itemTS = Utils.getPotSize(this.numVertices);
-    this.vertCoords = Utils.getTextureIndecies(
-        this.itemTS.w,
-        this.itemTS.h,
-        this.numVertices,
-        true);
-
-    this.vertices = {};
-    this.edges = [];
-
-    var verts = this.vertCoords.data;
-    for (var i = 0; i < data.edges.length; i+=2) {
-    // for (var i = 0; i < data.numEdges; i++) {
-      // var a = Math.floor(Math.random() * this.numVertices);
-      // var b = Math.floor(Math.random() * this.numVertices);
-      var a = data.edges[i];
-      var b = data.edges[i+1];
-      this.edges.push(verts[a*2], verts[a*2+1], verts[b*2], verts[b*2+1]);
+    if (this.positionTarget) {
+      gl.deleteFramebuffer(this.positionTarget.framebuffer);
+      gl.deleteTexture(this.positionTarget.getGlTexture());
     }
-    var colors;
-    if (data.vertexColors) {
-      colors = data.vertexColors;
-    } else {
-      colors = [];
-      for (i = 0; i < this.numVertices * 3; i++) {
-        colors.push(Math.random());
-      }
+    if (this.forceTarget) {
+      gl.deleteFramebuffer(this.forceTarget.framebuffer);
+      gl.deleteTexture(this.forceTarget.getGlTexture());
     }
+    if (this.tempTarget) {
+      gl.deleteFramebuffer(this.tempTarget.framebuffer);
+      gl.deleteTexture(this.tempTarget.getGlTexture());
+    }
+  },
 
-    this.edgeCoords = new DataBuffer(4, this.numEdges, new Float32Array(this.edges));
-    this.vertColors = new DataBuffer(4, this.numVertices, new Float32Array(colors));
+  createVertexData: function () {
     var size = this.itemTS;
+    this.vertCoords = Utils.getTextureIndecies(size.w,
+        size.h, this.numVertices, true);
     this.positionTarget = new RenderTarget(size.w, size.h, {type: gl.FLOAT});
     this.forceTarget = new RenderTarget(size.w, size.h, {type: gl.FLOAT});
     this.tempTarget = new RenderTarget(size.w, size.h, {type: gl.FLOAT});
 
-    this.init(onLoad);
+    var colors = [];
+    this.graph.forEachNode(function (node) {
+      if (node.color) {
+        colors.push(node.color[0], node.color[1], node.color[2]);
+      } else {
+        colors.push(1, 1, 1);
+      }
+    });
+    this.vertColors = new DataBuffer(4, this.numVertices, new Float32Array(colors));
   },
 
-  init: function (onLoad) {
-    if (this.shaders) {
+  setNumEdges: function () {
+    this.numEdges = this.graph.edgeCount;
+  },
+
+  deleteEdgeData: function () {
+    if (this.edgeCoords) {
+      gl.deleteBuffer(this.edgeCoords.glBuffer);
+    }
+  },
+
+  createEdgeData: function () {
+    var edges = [];
+
+    var verts = this.vertCoords.data;
+    this.graph.forEachEdge(function (edge) {
+      edges.push(verts[edge.fromId*2], verts[edge.fromId*2+1],
+        verts[edge.toId*2], verts[edge.toId*2+1]);
+    });
+    this.edgeCoords = new DataBuffer(4, this.numEdges, new Float32Array(edges));
+  },
+
+  reload: function () {
+    this.setNumVertices();
+    this.setNumEdges();
+    this.deleteVertexData()
+    this.createVertexData();
+    this.deleteEdgeData();
+    this.createEdgeData();
+    this.init();
+  },
+
+  init: function () {
+    if (this.nbodyProg) {
       gl.deleteProgram(this.nbodyProg.glProgram);
-      this.initNbody(this.shaders[2], this.shaders[3]);
+      this.initNbody(Shaders[2], Shaders[3]);
+
       this.initialPosProg.setViewport(0, 0, this.itemTS.w, this.itemTS.h);
-      this.edgeProg.setAttribute('coords', this.edgeCoords);
+      this.initialPosProg.setAttribute('coords', this.vertCoords);
+
       this.edgeProg.setViewport(0, 0, this.itemTS.w, this.itemTS.h);
       this.edgeProg.setRenderTarget(this.forceTarget);
+
       this.drawVerticesProg.setAttribute('coords', this.vertCoords);
       this.drawVerticesProg.setAttribute('color', this.vertColors);
+
+      this.edgeProg.setAttribute('coords', this.edgeCoords);
       this.drawEdgesProg.setAttribute('coords', this.edgeCoords);
-      this.initialPosProg.setAttribute('coords', this.vertCoords);
-      onLoad();
+
       return;
     }
-
-    var shaders = this.shaders = [];
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/initial_posv.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/initial_posf.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/nbodyv.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/nbodyf.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/edge_forcev.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/edge_forcef.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/draw_verticesv.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/draw_verticesf.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/draw_edgesv.glsl', 'utf8')));
-    shaders.push(Utils.processShader(fs.readFileSync(__dirname +'/draw_edgesf.glsl', 'utf8')));
     var sid = 0;
-    this.initInitialPos(shaders[sid++], shaders[sid++]);
-    this.initNbody(shaders[sid++], shaders[sid++]);
-    this.initEdges(shaders[sid++], shaders[sid++]);
-    this.initDrawVertices(shaders[sid++], shaders[sid++]);
-    this.initDrawEdges(shaders[sid++], shaders[sid++]);
-
-    if (onLoad) {
-      onLoad();
-    }
+    this.initInitialPos(Shaders[sid++], Shaders[sid++]);
+    this.initNbody(Shaders[sid++], Shaders[sid++]);
+    this.initEdges(Shaders[sid++], Shaders[sid++]);
+    this.initDrawVertices(Shaders[sid++], Shaders[sid++]);
+    this.initDrawEdges(Shaders[sid++], Shaders[sid++]);
   },
 
   initInitialPos: function (vert, frag) {
@@ -249,4 +278,4 @@ Graph.prototype = {
   }
 };
 
-module.exports = Graph;
+module.exports = Grapheen;
