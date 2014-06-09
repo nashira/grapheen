@@ -6,9 +6,9 @@ uniform mat4 matrix;
 uniform float pointSize;
 
 attribute vec2 coords;
-attribute vec3 color;
+attribute vec4 color;
 
-varying vec3 vColor;
+varying vec4 vColor;
 
 void main() {
   vec3 pos = texture2D(positionTexture, coords).xyz;

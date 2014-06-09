@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <title>webgl</title>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0'>
+  <style>
+  body {
+    background-color: #000000;
+    margin: 0px;
+    overflow: hidden;
+    font-family:Monospace;
+    font-size:13px;
+    text-align:center;
+    font-weight: bold;
+    text-align:center;
+  }
+
+.parse-tree-viz {
+  width: 100%;
+  height: 100%;
+  margin: 0px;
+  top: 0;
+  left: 0;
+}
+
+.parse-tree-viz-gui {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.parse-tree-viz canvas {
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+  margin: 0px;
+  overflow: hidden;
+}
+
+  </style>
+</head>
+<body>
+
+  <div class='parse-tree-viz overlay from-top'>
+    <canvas class='parse-tree-viz-canvas'></canvas>
+    <div class='parse-tree-viz-gui'/>
+  </div>
+  <script>
+
+
+    var calls = {};
+    var callStack = [];
+    window.ins_enter = function (name) {
+      var parent = callStack[callStack.length - 1];
+      callStack.push(name);
+      if (parent) {
+        var nameCalls = calls[parent];
+        if (!nameCalls) nameCalls = calls[parent] = {};
+        nameCalls[name] = (nameCalls[name] || 0) + 1;
+      }
+    };
+    window.ins_exit = function (name) {
+      callStack.pop();
+    }
+  </script>
+
+  <script src='../build/ins/grapheen.js'></script>
+  <!-- // <script src='../build/grapheen.js'></script> -->
+
+  <script>
+    var GraphView = require('grapheen').GraphView;
+    var Parser = require('grapheen').Parser;
+
+    function addCallEdges() {
+      var color = [1, 1, 1, 1];
+      for (var id in calls) {
+        var call = calls[id];
+        for (var jd in call) {
+          graph.addEdge(id, jd, {fromColor: color, toColor: color});
+        }
+      }
+      // graphView.grapheen.reload();
+      // graphView.grapheen.runInitialPos(0.1);
+
+      graphView.grapheen.setNumEdges();
+      graphView.grapheen.deleteEdgeData();
+      graphView.grapheen.createEdgeData();
+      graphView.grapheen.edgeProg.setAttribute('coords', graphView.grapheen.edgeCoords);
+      graphView.grapheen.drawEdgesProg.setAttribute('coords', graphView.grapheen.edgeCoords);
+      graphView.grapheen.drawEdgesProg.setAttribute('color', graphView.grapheen.edgeColors);
+    }
+
+    function getSource(scripts, callback) {
+      var code = '';
+      var called = scripts.length;
+      var i = 0, s;
+      while (s = scripts[i++]) {
+        (function (s) {
+          if (s.textContent) {
+            called--;
+            code += s.textContent + '\n';
+          } else {
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function () {
+              if (xhr.readyState == xhr.DONE) {
+                code += xhr.responseText + '\n';
+                  called--;
+                if (called == 0) {
+                  callback(code);
+                }
+              }
+            }
+            xhr.open('GET', s, true);
+            xhr.send();
+          }
+        }(s));
+      }
+      console.log(scripts)
+    }
+
+    var graphView = new GraphView();
+    var parser = new Parser();
+
+    getSource([
+      '../build/ins/grapheen.js',
+      // '../src/graph.js',
+      // '../src/databuffer.js',
+      // '../../src/indexbuffer.js',
+      // '../../src/rendertarget.js',
+      // '../src/texture.js'
+      // '../src/utils.js'
+      // '../lib/three.js'
+      // '//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js',
+      // '//ajax.googleapis.com/ajax/libs/jquerymobile/1.4.2/jquery.mobile.min.js',
+      // '//ajax.googleapis.com/ajax/libs/angularjs/1.2.15/angular.min.js',
+      // '//ajax.googleapis.com/ajax/libs/dojo/1.9.3/dojo/dojo.js'
+      ], function (code) {
+        // code = parser.instrument(code);
+        // console.log(code)
+
+        var tree = parser.parse(code);
+        // var tree = parser.parse('var f = function(){};');
+        console.log(tree)
+        var graph = window.graph = parser.getGraph();
+        console.log(graph)
+
+        graphView.init(graph,
+          document.querySelector('.parse-tree-viz-canvas'),
+          document.querySelector('.parse-tree-viz-gui'));
+    });
+  </script>
+
+</body>
+</html>

@@ -24,124 +24,124 @@ THE SOFTWARE.
 */
 
 var Graph = function Graph() {
-  this._nodes = {};
+  this.nodes = {};
   this.nodeCount = 0;
   this.edgeCount = 0;
 }
 
 Graph.prototype.addNode = function(id, data) {
-  if (!this._nodes[id]) {
+  if (!this.nodes[id]) {
     this.nodeCount++;
-    return this._nodes[id] = {
-      _id: id,
-      _outEdges: {},
-      _inEdges: {},
-      _data: data
+    return this.nodes[id] = {
+      id: id,
+      outEdges: {},
+      inEdges: {},
+      data: data
     };
   }
 };
 
 Graph.prototype.getNode = function(id) {
-  return this._nodes[id];
+  return this.nodes[id];
 };
 
 Graph.prototype.removeNode = function(id) {
 
-  var inEdgeId, nodeToRemove, outEdgeId, _ref, _ref1;
-  nodeToRemove = this._nodes[id];
+  var inEdgeId, nodeToRemove, outEdgeId;
+  nodeToRemove = this.nodes[id];
   if (!nodeToRemove) {
     return null;
   }
 
-  _ref = nodeToRemove._outEdges;
-  for (outEdgeId in _ref) {
+  var outEdges = nodeToRemove.outEdges;
+  for (outEdgeId in outEdges) {
     this.removeEdge(id, outEdgeId);
   }
-  _ref1 = nodeToRemove._inEdges;
-  for (inEdgeId in _ref1) {
+  var inEdges = nodeToRemove.inEdges;
+  for (inEdgeId in inEdges) {
     this.removeEdge(inEdgeId, id);
   }
   this.nodeCount--;
-  delete this._nodes[id];
+  delete this.nodes[id];
   return nodeToRemove;
 };
 
 Graph.prototype.addEdge = function(fromId, toId, data) {
   var edgeToAdd, fromNode, toNode;
 
-  fromNode = this._nodes[fromId];
-  toNode = this._nodes[toId];
+  fromNode = this.nodes[fromId];
+  toNode = this.nodes[toId];
   if (!fromNode || !toNode) {
     return;
   }
 
   edgeToAdd = {
+    fromNode: fromNode,
+    toNode: toNode,
     fromId: fromId,
     toId: toId,
-    _data: data
+    data: data
   };
 
-  fromNode._outEdges[toId] = edgeToAdd;
-  toNode._inEdges[fromId] = edgeToAdd;
+  fromNode.outEdges[toId] = edgeToAdd;
+  toNode.inEdges[fromId] = edgeToAdd;
   this.edgeCount++;
   return edgeToAdd;
 };
 
 Graph.prototype.getEdge = function(fromId, toId) {
 
-  var fromNode = this._nodes[fromId];
+  var fromNode = this.nodes[fromId];
 
   if (!fromNode) {
     return null;
   }
 
-  return fromNode._outEdges[toId] || null;
+  return fromNode.outEdges[toId] || null;
 };
 
 Graph.prototype.removeEdge = function(fromId, toId) {
 
   var edgeToDelete, fromNode, toNode;
-  fromNode = this._nodes[fromId];
-  toNode = this._nodes[toId];
-  edgeToDelete = fromNode._outEdges[toId];
+  fromNode = this.nodes[fromId];
+  toNode = this.nodes[toId];
+  edgeToDelete = fromNode.outEdges[toId];
   if (!edgeToDelete) {
     return null;
   }
-  delete fromNode._outEdges[toId];
-  delete toNode._inEdges[fromId];
+  delete(fromNode.outEdges[toId]);
+  delete(toNode.inEdges[fromId]);
   this.edgeCount--;
   return edgeToDelete;
 };
 
 Graph.prototype.getInEdges = function(nodeId) {
-  return nodeId in this._nodes ? this._nodes[nodeId]._inEdges : null;
+  return nodeId in this.nodes ? this.nodes[nodeId].inEdges : null;
 };
 
 Graph.prototype.getOutEdges = function(nodeId) {
-  return nodeId in this._nodes ? this._nodes[nodeId]._outEdges : null;
+  return nodeId in this.nodes ? this.nodes[nodeId].outEdges : null;
 };
 
 
 Graph.prototype.forEachNode = function(operation) {
-
-  var nodeId, nodeObject, _ref;
-  _ref = this._nodes;
-  for (nodeId in _ref) {
-    nodeObject = _ref[nodeId];
+  var nodeId, nodeObject;
+  var nodes = this.nodes;
+  for (nodeId in nodes) {
+    nodeObject = ref[nodeId];
     operation(nodeObject);
   }
 };
 
 Graph.prototype.forEachEdge = function(operation) {
+  var edgeObject, nodeId, nodeObject, toId;
+  var nodes = this.nodes;
+  for (nodeId in nodes) {
+    nodeObject = nodes[nodeId];
+    var outEdges = nodeObject.outEdges;
 
-  var edgeObject, nodeId, nodeObject, toId, _ref, _ref1;
-  _ref = this._nodes;
-  for (nodeId in _ref) {
-    nodeObject = _ref[nodeId];
-    _ref1 = nodeObject._outEdges;
-
-    for (toId in _ref1) {
-      edgeObject = _ref1[toId];
+    for (toId in outEdges) {
+      edgeObject = outEdges[toId];
       operation(edgeObject);
     }
   }

@@ -6,6 +6,9 @@
     "dependencies": {
       "gpgpu": "*",
       "esprima": "1.2.x",
+      "escodegen": "1.3.x"
+    },
+    "devDependencies": {
       "browserify": "4.1.x",
       "brfs": "1.1.x"
     }
